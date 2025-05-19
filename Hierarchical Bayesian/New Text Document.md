@@ -3,13 +3,13 @@
 In this multi-part series, I will introduce you to hierarchical Bayesian modelling, a flexible modeling approach to automatically combine the results of multiple sub-models with optimal weights determined automatically through Bayesian updating. This article will introduce the concept, implementation, and alternative use cases for this method. 
 
 ### The Problem with Traditional Approaches
-As an application, imagine that we’re a large grocery store trying to maximize product-level revenue by setting prices. First, we would need to estimate the price elasticity of demand (how responsive demand is to a 1% change in price) using longitudinal data with N products over T periods. Remember that elasticity so defined as $$\beta=\frac{\partial \log{\rm units}_{it}}{\partial \log {\rm price}_{it}}$$
+As an application, imagine that we’re a large grocery store trying to maximize product-level revenue by setting prices. First, we would need to estimate the price elasticity of demand (how responsive demand is to a 1% change in price) using longitudinal data with N products over T periods. Remember that elasticity so defined as $\beta=\frac{\partial \log{\rm units}_{it}}{\partial \log {\rm price}_{it}}$
 
 Assuming no confounders, using a standard fixed-effect regression model of log units sold on log price:
 
-$$\log(\rm Units_{it})= \beta  \log(\rm Price)_{it} +\gamma_t+ \delta_i+ \epsilon_{it}$$
+$\log(\rm Units_{it})= \beta  \log(\rm Price)_{it} +\gamma_t+ \delta_i+ \epsilon_{it}$
 
-Would allow us to recover the average elasticity $$\beta$$ across all $$N$$ units, also known as the Average Treatment Effect. This would mean that the store could target an average price level across all products in their store to maximize revenue. If these units have a natural grouping (product categories), we might be able to identify the average elasticity of each product category by running a separate sub-regression using only units from that category. This would mean that the store could target average prices in each product category to maximize revenue in that category. If $$T$$ is large enough, we might even be able to run a separate regression for each individual unit to recover unit-level elasticity of demand, allowing the store to set prices at the product-level. 
+Would allow us to recover the average elasticity $\beta$ across all $N$ units, also known as the Average Treatment Effect. This would mean that the store could target an average price level across all products in their store to maximize revenue. If these units have a natural grouping (product categories), we might be able to identify the average elasticity of each product category by running a separate sub-regression using only units from that category. This would mean that the store could target average prices in each product category to maximize revenue in that category. If $T$ is large enough, we might even be able to run a separate regression for each individual unit to recover unit-level elasticity of demand, allowing the store to set prices at the product-level. 
 
 However, data in reality is often not as perfect as we would like it to be. Some products might have no/limited price changes, some products might have only been active for a short time (cold start), or the number of products could be different across categories. Under these real-world restrictions, running separate regressions to identify product elasticity would likely lead to large standard errors or no significant results for many products/categories. However, the hierarchical Bayesian approach allows us to acknowledge differences across groups while still sharing statistical strength among them. With hierarchical Bayesian, it is possible to run one single regression (like the pooled case) while still recovering elasticities at the product level.  
 
@@ -28,16 +28,16 @@ The "Bayesian" aspect refers to how we update our beliefs about these parameters
 
 Let's formalize this with our price elasticity example, where we try to estimate unit-level price elasticity:
 
-$$\log(\rm Units_{it})= \beta  \log(\rm Price)_{it} +\gamma_{c(i),t}+ \delta_i+ \epsilon_{it}$$
+$\log(\rm Units_{it})= \beta  \log(\rm Price)_{it} +\gamma_{c(i),t}+ \delta_i+ \epsilon_{it}$
 
 Where:
- - $$\beta_i \sim \rm Normal(\beta_{c\left(i\right)},\sigma_i)$$
- - $$\beta_{c(i)}\sim \rm Normal(\beta_g,\sigma_{c(i)})$$
- - $$\beta_g\sim Normal(\mu,\sigma)$$
+ - $\beta_i \sim \rm Normal(\beta_{c\left(i\right)},\sigma_i)$
+ - $\beta_{c(i)}\sim \rm Normal(\beta_g,\sigma_{c(i)})$
+ - $\beta_g\sim Normal(\mu,\sigma)$
 
-Where $$\gamma_{c(i),t}$$ is a set of category-by-time dummy variables to capture the average demand of each unique category in each time period. $$\delta_i$$ are product dummies to capture the time-invariant heterogenous preferences of consumers for each product. This “fixed-effect” formulation is standard and common in many regression-based models to control for unobserved confounders.
+Where $\gamma_{c(i),t}$ is a set of category-by-time dummy variables to capture the average demand of each unique category in each time period. $\delta_i$ are product dummies to capture the time-invariant heterogenous preferences of consumers for each product. This “fixed-effect” formulation is standard and common in many regression-based models to control for unobserved confounders.
 
-We assume that the unit level elasticity $$\beta_i$$ is drawn from a normal distribution centered around the category-level elasticity average $$\beta_{c(i)}$$, and the category-level average is drawn from a global elasticity $$\beta_g$$. For the spread of the distribution, we can assume a hierarchical structure for that too, but in this example, we just set priors for them individually for simplicity. One example of our prior beliefs can be: $$\{ \mu= -1.5, \sigma= .5, \sigma_{c(i)}=.4, \sigma_i=.3\}$$. This formulation assumes that the global elasticity is slighty elastic, 99.7% of the elasticities fall between -3 and 0, and we set increasingly tighter priors for the lower levels. To test these initial parameters, we would do a prior predictive check (not covered in this blog post) to see whether our prior beliefs can recover the data that we observe. 
+We assume that the unit level elasticity $\beta_i$ is drawn from a normal distribution centered around the category-level elasticity average $\beta_{c(i)}$, and the category-level average is drawn from a global elasticity $\beta_g$. For the spread of the distribution, we can assume a hierarchical structure for that too, but in this example, we just set priors for them individually for simplicity. One example of our prior beliefs can be: $\{ \mu= -1.5, \sigma= .5, \sigma_{c(i)}=.4, \sigma_i=.3\}$. This formulation assumes that the global elasticity is slighty elastic, 99.7% of the elasticities fall between -3 and 0, and we set increasingly tighter priors for the lower levels. To test these initial parameters, we would do a prior predictive check (not covered in this blog post) to see whether our prior beliefs can recover the data that we observe. 
 
 This hierarchical structure allows information to flow between products in the same category and even across categories. If a particular product has limited price variation data, its elasticity estimate will be pulled toward the category average. Similarly, categories with fewer products will be influenced more by the store-level average. The beauty of this approach is that the degree of "pooling" happens automatically based on the data. Products with lots of price variation will maintain estimates closer to their individual data patterns, while those with sparse data will borrow more strength from their group.
 
