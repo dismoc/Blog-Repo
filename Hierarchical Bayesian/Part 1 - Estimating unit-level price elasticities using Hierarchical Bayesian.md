@@ -3,11 +3,15 @@
 In this multi-part series, I will introduce you to hierarchical Bayesian modelling, a flexible modeling approach to automatically combine the results of multiple sub-models with optimal weights determined automatically through Bayesian updating. This article will introduce the concept, implementation, and alternative use cases for this method. 
 
 ### The Problem with Traditional Approaches
-As an application, imagine that we’re a large grocery store trying to maximize product-level revenue by setting prices. First, we would need to estimate the price elasticity of demand (how responsive demand is to a 1% change in price) using longitudinal data with N products over T periods. Remember that elasticity so defined as $\beta=\frac{\partial \log{\rm units}_{it}}{\partial \log {\rm price}_{it}}$
-
+As an application, imagine that we’re a large grocery store trying to maximize product-level revenue by setting prices. First, we would need to estimate the price elasticity of demand (how responsive demand is to a 1% change in price) using longitudinal data with $N$ products over $T$ periods. Remember that elasticity so defined as:
+```math
+\beta=\frac{\partial \log{\textrm{Units}}_{it}}{\partial \log \textrm{Price}_{it}}
+```
 Assuming no confounders, using a standard fixed-effect regression model of log units sold on log price:
 
-$\log(\rm Units_{it})= \beta  \log(\rm Price)_{it} +\gamma_t+ \delta_i+ \epsilon_{it}$
+```math
+\log(\textrm{Units}_{it})= \beta  \log(\textrm{Price})_{it} +\gamma_t+ \delta_i+ \epsilon_{it}
+```
 
 Would allow us to recover the average elasticity $\beta$ across all $N$ units, also known as the Average Treatment Effect. This would mean that the store could target an average price level across all products in their store to maximize revenue. If these units have a natural grouping (product categories), we might be able to identify the average elasticity of each product category by running a separate sub-regression using only units from that category. This would mean that the store could target average prices in each product category to maximize revenue in that category. If $T$ is large enough, we might even be able to run a separate regression for each individual unit to recover unit-level elasticity of demand, allowing the store to set prices at the product-level. 
 
@@ -28,24 +32,28 @@ The "Bayesian" aspect refers to how we update our beliefs about these parameters
 
 Let's formalize this with our price elasticity example, where we try to estimate unit-level price elasticity:
 
-$\log(\rm Units_{it})= \beta  \log(\rm Price)_{it} +\gamma_{c(i),t}+ \delta_i+ \epsilon_{it}$
+```math
+\log(\textrm{Units}_{it})= \beta  \log(\textrm{Price})_{it} +\gamma_{c(i),t}+ \delta_i+ \epsilon_{it}
+```
 
 Where:
- - $\beta_i \sim \rm Normal(\beta_{c\left(i\right)},\sigma_i)$
- - $\beta_{c(i)}\sim \rm Normal(\beta_g,\sigma_{c(i)})$
- - $\beta_g\sim Normal(\mu,\sigma)$
+ - $\beta_i \sim \textrm{Normal}(\beta_{c\left(i\right)},\sigma_i)$
+ - $\beta_{c(i)}\sim \textrm{Normal}(\beta_g,\sigma_{c(i)})$
+ - $\beta_g\sim \textrm{Normal}(\mu,\sigma)$
 
 Where $\gamma_{c(i),t}$ is a set of category-by-time dummy variables to capture the average demand of each unique category in each time period. $\delta_i$ are product dummies to capture the time-invariant heterogenous preferences of consumers for each product. This “fixed-effect” formulation is standard and common in many regression-based models to control for unobserved confounders.
 
-We assume that the unit level elasticity $\beta_i$ is drawn from a normal distribution centered around the category-level elasticity average $\beta_{c(i)}$, and the category-level average is drawn from a global elasticity $\beta_g$. For the spread of the distribution, we can assume a hierarchical structure for that too, but in this example, we just set priors for them individually for simplicity. One example of our prior beliefs can be: $\{ \mu= -1.5, \sigma= .5, \sigma_{c(i)}=.4, \sigma_i=.3\}$. This formulation assumes that the global elasticity is slighty elastic, 99.7% of the elasticities fall between -3 and 0, and we set increasingly tighter priors for the lower levels. To test these initial parameters, we would do a prior predictive check (not covered in this blog post) to see whether our prior beliefs can recover the data that we observe. 
+We assume that the unit level elasticity $\beta_i$ is drawn from a normal distribution centered around the category-level elasticity average $\beta_{c(i)}$, and the category-level average is drawn from a global elasticity $\beta_g$. For the spread of the distribution, we can assume a hierarchical structure for that too, but in this example, we just set priors for them individually for simplicity. One example of our prior beliefs can be: $\{ \mu= -2, \sigma= 1, \sigma_{c(i)}=1, \sigma_i=1\}$. This formulation of the prior assumes that the global elasticity is elastic, 95% of the elasticities fall between -4 and 0, and we set loose priors for the spread of these elasticities. To test these initial parameters, we would do a prior predictive check (not covered in this blog post) to see whether our prior beliefs can recover the data that we observe. 
 
 This hierarchical structure allows information to flow between products in the same category and even across categories. If a particular product has limited price variation data, its elasticity estimate will be pulled toward the category average. Similarly, categories with fewer products will be influenced more by the store-level average. The beauty of this approach is that the degree of "pooling" happens automatically based on the data. Products with lots of price variation will maintain estimates closer to their individual data patterns, while those with sparse data will borrow more strength from their group.
 
 ## Implementation
+In this section, we implement the above model using the Numpyro package in Python, a lightweight probabilistic programming language powered by JAX for autograd and JIT compilation to GPU/TPU/CPU. We start off by generating our synthetic data, defining the model, and fitting the model to the data. We close out with some visualizations of the results.
 
 ### Data Generating Process
+We simulate sales data where demand follows a log-linear relationship with price and the product-level elasticity is generated from a Gaussian distribution. We add in a random price change every time period with a given probability, category-specific time trends, and random noise. This adds in multiplicatively to generate our log expected demand. From the log expected demand, we exponentiate to get the actual demand, and draw realized units sold from a Poisson distribution. We then filter to keep only units with more than 100 units sold (helps accuracy of estimates), and are left with $N=11,798$ products over $T = 156$ periods (weekly data for 3 years). From this dataset, the true global elasticity is $\beta_g = -1.6$, with category-level elasticities ranging from $\beta_{c(i)} \in [-1.68, -1.48]$.
 
-In this section, we implement the above model using the Numpyro package in Python, a lightweight probabilistic programming language powered by JAX for autograd and JIT compilation to GPU/TPU/CPU. We simulate sales data where demand follows a log-linear relationship with price, structured across three levels: global, category, and product-specific elasticities. The model generates product demand using a Poisson distribution where the log rate parameter combines baseline demand factors (including category-specific time trends and volatility) with a price effect. The price effect comes into the demand based on a unit-level loading, drawn around a category-level parameter, drawn from a global parameter. 
+
 
 ```python
 import numpy as np
@@ -217,3 +225,224 @@ df = filter_dataframe(df)
 df.loc[:,'cat_by_time'] = df['category'].astype(str) + '-' + df['time_period'].astype(str)
 df.head()
 ```
+Filtering summary:
+- Original number of products: 20000
+- Products with > 100 units: 11798
+- Products filtered out: 8202 (41.0%)
+
+Elasticity Information:
+- Global elasticity: -1.598
+- Category elasticities range: -1.681 to -1.482
+
+<div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>product</th>
+      <th>category</th>
+      <th>time_period</th>
+      <th>price</th>
+      <th>units_sold</th>
+      <th>product_elasticity</th>
+      <th>category_elasticity</th>
+      <th>global_elasticity</th>
+      <th>cat_by_time</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>0</th>
+      <td>0</td>
+      <td>8</td>
+      <td>0</td>
+      <td>125.95</td>
+      <td>550</td>
+      <td>-1.185907</td>
+      <td>-1.63475</td>
+      <td>-1.597683</td>
+      <td>8-0</td>
+    </tr>
+    <tr>
+      <th>1</th>
+      <td>0</td>
+      <td>8</td>
+      <td>1</td>
+      <td>125.95</td>
+      <td>504</td>
+      <td>-1.185907</td>
+      <td>-1.63475</td>
+      <td>-1.597683</td>
+      <td>8-1</td>
+    </tr>
+    <tr>
+      <th>2</th>
+      <td>0</td>
+      <td>8</td>
+      <td>2</td>
+      <td>149.59</td>
+      <td>388</td>
+      <td>-1.185907</td>
+      <td>-1.63475</td>
+      <td>-1.597683</td>
+      <td>8-2</td>
+    </tr>
+    <tr>
+      <th>3</th>
+      <td>0</td>
+      <td>8</td>
+      <td>3</td>
+      <td>149.59</td>
+      <td>349</td>
+      <td>-1.185907</td>
+      <td>-1.63475</td>
+      <td>-1.597683</td>
+      <td>8-3</td>
+    </tr>
+    <tr>
+      <th>4</th>
+      <td>0</td>
+      <td>8</td>
+      <td>4</td>
+      <td>176.56</td>
+      <td>287</td>
+      <td>-1.185907</td>
+      <td>-1.63475</td>
+      <td>-1.597683</td>
+      <td>8-4</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+### Model
+We begin by creating indices for products, categories, and category-time combinations using `pd.factorize()`, which converts categorical variables into integer arrays. It also creates a mapping from products to their respective categories for use in the hierarchical structure. We then convert the price (logged) and units series into JAX arrays, then create plates that corresponds to each of our parameter groups. These plates store the parameters for each level of the hierarchy, along with the fixed effects.
+
+The implementation uses NumPyro's plate construct to define the parameter groups:
+- `global_a`: 1 global price elasticity parameter with a Normal(-2, 1) prior
+- `category_a`: $C=10$ category-level elasticities with priors centered on the global parameter
+- `product_a`: $N=11,798$ product-specific elasticities with priors centered on their respective category parameters
+- `product_effect`: $N=11,798$ product-specific baseline demand effects
+- `time_cat_effects`: $(T=156)\cdot(C=10)$ time-varying effects specific to each category-time combination
+
+The `LocScaleReparam()` argument is applied to the lower-level parameters to improve sampling efficiency. After creating the parameters, we calculate log expected demand, then convert it back to a rate parameter with clipping for numerical stability. Finally, we call on the data plate to sample from a Poisson distribution with the calculated rate parameter. The optimization algorithm will then find the values of the parameters that best fit the data. We finally render the model to show graphically how the parameters are related to each other.
+
+
+```python
+import jax
+import jax.numpy as jnp
+import numpyro
+import numpyro.distributions as dist
+from numpyro.infer.reparam import LocScaleReparam
+
+def model(df: pd.DataFrame, outcome: None):
+    # Define indexes
+    product_idx, unique_product = pd.factorize(df['product'])
+    cat_idx, unique_category = pd.factorize(df['category'])
+    time_cat_idx, unique_time_cat = pd.factorize(df['cat_by_time'])
+
+    # Convert the price and units series to jax numpy arrays
+    log_price = jnp.log(df.price.values)
+    outcome = jnp.array(outcome) if outcome is not None else None
+
+    # Generate mapping dfs
+    product_to_category = np.zeros(len(unique_product), dtype=np.int32)
+    for i, prod in enumerate(unique_product):
+        product_to_category[i] = cat_idx[df[df['product'] == prod]['category'].iloc[0] == df['category']][0]
+
+    # Create the plates to store parameters
+    category_plate = numpyro.plate("category", unique_category.shape[0])
+    time_cat_plate = numpyro.plate("time_cat", unique_time_cat.shape[0])
+    product_plate = numpyro.plate("product", unique_product.shape[0])
+    data_plate = numpyro.plate("data", size=outcome.shape[0])
+
+    # DEFINING MODEL PARAMETERS
+    global_a = numpyro.sample("global_a", dist.Normal(-2, 1))
+
+    with category_plate:
+        category_a = numpyro.sample("category_a", dist.Normal(global_a, 1), infer={"reparam": LocScaleReparam()})
+
+    with product_plate:
+        product_a = numpyro.sample("product_a", dist.Normal(category_a[product_to_category], 1), infer={"reparam": LocScaleReparam()})
+        product_effect = numpyro.sample("product_effect", dist.Normal(0, 1))
+
+    with time_cat_plate:
+        time_cat_effects = numpyro.sample("time_cat_effects", dist.Normal(0, 1))
+
+    # Calculating expected demand
+    def calculate_demand():
+        log_demand = product_a[product_idx]*log_price + time_cat_effects[time_cat_idx] + product_effect[product_idx]
+        expected_demand = jnp.exp(jnp.clip(log_demand, -4, 20)) # clip for stability and exponentiate 
+        return expected_demand
+
+    demand = calculate_demand()
+
+    with data_plate:
+        # Sample observations
+        numpyro.sample(
+            "obs",
+            dist.Poisson(demand),
+            obs=outcome
+        )
+    
+numpyro.render_model(
+    model=model,
+    model_kwargs={"df": df,"outcome": df['units_sold']},
+    render_distributions=True,
+    render_params=True,
+)
+```
+
+<img src="./figures/output_1_0.svg">
+
+### Estimation
+While there are multiple options on how to estimate this equation, we use Stochastic Variational Inference for this particular application. 
+
+```python
+from numpyro.infer import SVI, Trace_ELBO, autoguide, init_to_sample
+import optax
+import matplotlib.pyplot as plt
+
+rng_key = jax.random.PRNGKey(42)
+guide = autoguide.AutoNormal(model, init_loc_fn=init_to_sample)
+# Define a learning rate schedule
+learning_rate_schedule = optax.exponential_decay(
+    init_value=0.01,
+    transition_steps=1000,
+    decay_rate=0.99,
+    staircase = False
+)
+
+# Define the optimizer
+optimizer = optax.adamw(learning_rate=learning_rate_schedule)
+svi = SVI(model, guide, optimizer, loss=Trace_ELBO(num_particles=8, vectorize_particles = True))
+
+# Run SVI
+svi_result = svi.run(rng_key, 500000, df, df['units_sold'])
+plt.semilogy(svi_result.losses);
+```
+
+### Validation
+
+## Conclusion
+
+**Alternate Uses**: Aside from estimating price elasticity of demand, hierarchical Bayesian models also have a variety of other uses in data science. In retail, hierarchical Bayesian models can forecast demand for existing stores and solve the cold-start problem for new stores by borrowing information from stores/networks that have already been established and are clustered within the same hierarchy. For recommendation systems, hierarchical Bayesian can estimate user-level preferences from a combination of user and item-level characteristics. This structure enables relevant recommendations to new users based on cohort behaviors, gradually transitioning to individualized recommendations as user history accumulates.
+
+Finally, these models can also combine results from experimental and observational studies. Scientists can leverage historical observational data and supplement it with newly developed A/B tests to reduce the required sample size for experiments by incorporating prior knowledge. This approach creates a continuous learning framework where each new experiment builds upon previous findings rather than starting from scratch. For teams facing resource constraints, this means faster time-to-insight (especially when combined with surrogate models) and more efficient experimentation pipelines. 
+
+**Final Remarks**: While this introduction has highlighted several applications of hierarchical Bayesian models, we've only scratched the surface. We haven't delved into granular implementation aspects such as prior and posterior predictive checks, formal goodness-of-fit assessments, computational scaling, distributed training, estimation strategies (MCMC vs. variational inference), and non-nested hierarchical structures, each of which deserves their own post.
+
+Nevertheless, this overview should provide a practical starting point for incorporating hierarchical Bayesian into your toolkit. These models offer a framework for handling (usually) messy, multi-level data structures that are often seen in real-world business problems. As you begin implementing these approaches, I'd love to hear about your experiences, challenges, successes, and new use cases for this class of model, so please reach out with questions, insights, or examples through [my email](mailto:tranderektri@google.com) or [LinkedIn](https://www.linkedin.com/in/derek-tran-ab75ab64/). Thank you for reading!
