@@ -1,4 +1,4 @@
-# Estimating unit-level price elasticities using Hierarchical Bayesian
+# Estimating product-level price elasticities using Hierarchical Bayesian
 
 In this article, I will introduce you to hierarchical Bayesian modelling, a flexible modeling approach to automatically combine the results of multiple sub-models. This method enables estimation of individual-level effects by optimally combining information across different data groupings through Bayesian updating. This approach is particularly valuable when individual units have limited observations but share characteristics with similar units.
 
