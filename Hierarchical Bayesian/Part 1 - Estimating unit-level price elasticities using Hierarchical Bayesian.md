@@ -340,6 +340,7 @@ The implementation uses NumPyro's plate construct to define the parameter groups
 
 The `LocScaleReparam()` argument is applied to the lower-level parameters to improve sampling efficiency. After creating the parameters, we calculate log expected demand, then convert it back to a rate parameter with clipping for numerical stability. Finally, we call on the data plate to sample from a Poisson distribution with the calculated rate parameter. The optimization algorithm will then find the values of the parameters that best fit the data. We finally render the model to show graphically how the parameters are related to each other.
 
+<img src="./figures/output_1_0.svg">
 
 ```python
 import jax
@@ -406,10 +407,11 @@ numpyro.render_model(
 )
 ```
 
-<img src="./figures/output_1_0.svg">
 
 ### Estimation
-While there are multiple options on how to estimate this equation, we use Stochastic Variational Inference for this particular application. 
+While there are multiple options on how to estimate this equation, we use [Stochastic Variational Inference](https://jmlr.org/papers/volume14/hoffman13a/hoffman13a.pdf) (SVI) for this particular application. As an overview, SVI is a gradient-based optimization method to minimize the KL-divergence between a posited posterior distribution to the true posterior distribution by minimizing the ELBO. This is a different estimation technique from [Markov-Chain Monte Carlo](https://www.publichealth.columbia.edu/research/population-health-methods/markov-chain-monte-carlo) (MCMC), which samples from the true posterior distribution. However, SVI is more efficient and scaled to large datasets. For this application, we just need to set a random seed, initialize the guide (family of posterior distribution, assumed to be a Diagonal Normal), define the learning rate schedule, define the optimizer, and run the optimization for 1,000,000 iterations. We then plot the losses to monitor convergence.
+
+<img src="./figures/output_4_0.png">
 
 ```python
 from numpyro.infer import SVI, Trace_ELBO, autoguide, init_to_sample
@@ -431,11 +433,285 @@ optimizer = optax.adamw(learning_rate=learning_rate_schedule)
 svi = SVI(model, guide, optimizer, loss=Trace_ELBO(num_particles=8, vectorize_particles = True))
 
 # Run SVI
-svi_result = svi.run(rng_key, 500000, df, df['units_sold'])
+svi_result = svi.run(rng_key, 1000000, df, df['units_sold'])
 plt.semilogy(svi_result.losses);
 ```
 
+**Recovering Posterior Samples**
+
+Once the model has been trained, we can can recover the posterior distribution of the parameters by feeding in the parameters and the initial dataset. We cannot call the parameters directly since Numpyro uses an affline transformation on the back-end for non-Normal distributions. Therefore, we sample 1000 times from the posterior distribution and calculate the mean and standard deviation of each parameter in our model. The final part of the following code creates a dataframe with the estimated elasticity for each product, which we then join back to our original dataframe to test whether the algorithm recovers the true elasticity.
+
+```python
+predictive = numpyro.infer.Predictive(
+    autoguide.AutoNormal(model, init_loc_fn=init_to_sample),
+    params=svi_result.params,
+    num_samples=1000
+)
+
+samples = predictive(rng_key, df, df['units_sold'])
+
+# Extract means and std dev
+results = {}
+excluded_keys = ['product_effect', 'time_cat_effects']
+for k, v in samples.items():
+    if k not in excluded_keys:
+        results[f"{k}"] = np.mean(v, axis=0)
+        results[f"{k}_std"] = np.std(v, axis=0)
+
+# product elasticity estimates
+prod_elasticity_df = pd.DataFrame({
+    'product': df['product'].unique(),
+    'product_elasticity_svi': results['product_a'],
+    'product_elasticity_svi_std': results['product_a_std'],
+})
+result_df = df.merge(prod_elasticity_df, on='product', how='left')
+result_df.head()
+
+# Category elasticity estimates
+prod_elasticity_df = pd.DataFrame({
+    'category': df['category'].unique(),
+    'category_elasticity_svi': results['category_a'],
+    'category_elasticity_svi_std': results['category_a_std'],
+})
+result_df = result_df.merge(prod_elasticity_df, on='category', how='left')
+
+# Global elasticity estimates
+result_df['global_a_svi'] = results['global_a']
+result_df['global_a_svi_std'] = results['global_a_std']
+result_df.head()
+```
+
+
+<div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>product</th>
+      <th>category</th>
+      <th>time_period</th>
+      <th>price</th>
+      <th>units_sold</th>
+      <th>product_elasticity</th>
+      <th>category_elasticity</th>
+      <th>global_elasticity</th>
+      <th>cat_by_time</th>
+      <th>product_elasticity_svi</th>
+      <th>product_elasticity_svi_std</th>
+      <th>category_elasticity_svi</th>
+      <th>category_elasticity_svi_std</th>
+      <th>global_a_svi</th>
+      <th>global_a_svi_std</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>0</th>
+      <td>0</td>
+      <td>8</td>
+      <td>0</td>
+      <td>125.95</td>
+      <td>550</td>
+      <td>-1.185907</td>
+      <td>-1.63475</td>
+      <td>-1.597683</td>
+      <td>8-0</td>
+      <td>-1.180956</td>
+      <td>0.000809</td>
+      <td>-1.559872</td>
+      <td>0.027621</td>
+      <td>-1.5550271</td>
+      <td>0.2952548</td>
+    </tr>
+    <tr>
+      <th>1</th>
+      <td>0</td>
+      <td>8</td>
+      <td>1</td>
+      <td>125.95</td>
+      <td>504</td>
+      <td>-1.185907</td>
+      <td>-1.63475</td>
+      <td>-1.597683</td>
+      <td>8-1</td>
+      <td>-1.180956</td>
+      <td>0.000809</td>
+      <td>-1.559872</td>
+      <td>0.027621</td>
+      <td>-1.5550271</td>
+      <td>0.2952548</td>
+    </tr>
+    <tr>
+      <th>2</th>
+      <td>0</td>
+      <td>8</td>
+      <td>2</td>
+      <td>149.59</td>
+      <td>388</td>
+      <td>-1.185907</td>
+      <td>-1.63475</td>
+      <td>-1.597683</td>
+      <td>8-2</td>
+      <td>-1.180956</td>
+      <td>0.000809</td>
+      <td>-1.559872</td>
+      <td>0.027621</td>
+      <td>-1.5550271</td>
+      <td>0.2952548</td>
+    </tr>
+    <tr>
+      <th>3</th>
+      <td>0</td>
+      <td>8</td>
+      <td>3</td>
+      <td>149.59</td>
+      <td>349</td>
+      <td>-1.185907</td>
+      <td>-1.63475</td>
+      <td>-1.597683</td>
+      <td>8-3</td>
+      <td>-1.180956</td>
+      <td>0.000809</td>
+      <td>-1.559872</td>
+      <td>0.027621</td>
+      <td>-1.5550271</td>
+      <td>0.2952548</td>
+    </tr>
+    <tr>
+      <th>4</th>
+      <td>0</td>
+      <td>8</td>
+      <td>4</td>
+      <td>176.56</td>
+      <td>287</td>
+      <td>-1.185907</td>
+      <td>-1.63475</td>
+      <td>-1.597683</td>
+      <td>8-4</td>
+      <td>-1.180956</td>
+      <td>0.000809</td>
+      <td>-1.559872</td>
+      <td>0.027621</td>
+      <td>-1.5550271</td>
+      <td>0.2952548</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+
 ### Validation
+
+The following code plots the true and estimated elasticities for each product. Each point is ranked by their true elasticity value (black), and the estimated elasticity from the model (blue) is also shown. We can see that for the most part, the estimated elasticities are close to the true elasticities, with a Mean Absolute Error of around 0.106. However, one of the trade-offs of SVI is that the standard errors recovered by the model are [much smaller](https://proceedings.mlr.press/r5/wang05a.html) than the true standard errors, a topic which we will further explore in another article. We can see that the SVI estimates closely follow the pattern of the true elasticities but with some noise, particularly in the left side elasticity ranges. When we look at the category-level elasticitiy estimates on the bottom left, we can see that the both the category-level estimates recovered from the model and the bootstrapped samples from the product-level elasticities are slightly biased towards zero, with an MAE of .097. However, the global elasticity is recovered very well, with an MAE of .042.
+
+This leads to one final note of using SVI for hierarchical Bayesian models, the importance of the priors. When using Bayesian methods for big data to estimate a global parameter, the posterior likelihood usually dominates the prior distribution, and prior specification becomes unimportant. However, under a hierarchical framework, the priors matter a lot more due to the changes to sample size. If we had just one global parameter, we would pool all observations into that one parameter. However, when we set up a hierarchical model, the global parameter now only have 10 category-level observations, and each category only has observations of all the products in that category. Each product only has observations of itself. As a result, the effective sample size of each parameter drastically reduces as compared to a pooled model. As a result, [prior predictive checks](https://www.pymc.io/projects/docs/en/stable/learn/core_notebooks/posterior_predictive.html) become even more important for these class of models.
+
+<img src="./figures/output_9_0.png">
+
+
+```python
+import matplotlib.pyplot as plt
+import numpy as np
+from scipy.stats import norm
+
+def elasticity_plots(result_df, results):
+
+    fig = plt.figure(figsize=(16, 12))
+    gs = fig.add_gridspec(2, 2)
+    ax1 = fig.add_subplot(gs[0, :])
+    
+    # Prepare data for product plot
+    df_product = result_df[['product','product_elasticity','product_elasticity_svi']].drop_duplicates()
+    df_product = df_product.sort_values('product_elasticity')
+    mae_product = np.mean(np.abs(result_df.product_elasticity-result_df.product_elasticity_svi))
+    
+    # Plot product data
+    ax1.scatter(range(len(df_product)), df_product['product_elasticity'], color='black', label='True Elasticity', s=20, zorder=3)
+    ax1.scatter(range(len(df_product)), df_product['product_elasticity_svi'], color='blue', 
+               label=f'SVI Estimate (MAE: {mae_product:.4f})', s=3, zorder=2)
+    ax1.set_xlabel('Product Index (sorted by true elasticity)')
+    ax1.set_ylabel('Elasticity Value')
+    ax1.set_title('SVI Estimates of True Product Elasticities')
+    ax1.legend()
+    ax1.grid(alpha=0.3)
+    
+    # Second plot (category elasticity)
+    ax2 = fig.add_subplot(gs[1, 0])
+    
+    # Prepare data for category plot
+    category_stats = result_df[['product','category','category_elasticity','product_elasticity_svi']].drop_duplicates()
+    category_stats = category_stats.groupby('category').agg({
+        'product_elasticity_svi': ['mean', 'std'],
+        'category_elasticity': 'first'
+    }).reset_index()
+    category_stats.columns = ['category', 'product_elasticity_mean', 'product_elasticity_std', 'true_category_elasticity']
+    category_stats = category_stats.sort_values('true_category_elasticity')
+    mae_category = np.mean(np.abs(category_stats.product_elasticity_mean-category_stats.true_category_elasticity))
+    
+    # Calculate 95% confidence intervals
+    category_stats['ci_lower'] = category_stats['product_elasticity_mean'] - 1.96 * category_stats['product_elasticity_std']
+    category_stats['ci_upper'] = category_stats['product_elasticity_mean'] + 1.96 * category_stats['product_elasticity_std']
+    
+    # Plot category data
+    ax2.scatter(range(len(category_stats)), category_stats['true_category_elasticity'], 
+                color='black', label='True Elasticity', s=50, zorder=3)
+    ax2.scatter(range(len(category_stats)), category_stats['product_elasticity_mean'], 
+                color='blue', label=f'Aggregated Estimate (MAE: {mae_category:.4f})', s=30, zorder=2)
+    
+    # Plot 95% CI
+    for i in range(len(category_stats)):
+        ax2.plot([i, i], 
+                [category_stats['ci_lower'].iloc[i], category_stats['ci_upper'].iloc[i]], 
+                color='blue', alpha=0.3, zorder=1)
+    
+    ax2.set_xlabel('Category Index (sorted by true elasticity)')
+    ax2.set_ylabel('Elasticity')
+    ax2.set_title('Comparison with True Category Elasticity')
+    ax2.legend()
+    ax2.grid(alpha=0.3)
+    
+    # Third plot (global elasticity)
+    ax3 = fig.add_subplot(gs[1, 1])
+    
+    # Prepare data for global plot
+    temp = result_df[['product','product_elasticity_svi','global_elasticity']].drop_duplicates()
+    bootstrap_means = [np.mean(np.random.choice(np.array(temp['product_elasticity_svi']), 100)) for i in range(10000)]
+    global_means = np.random.normal(results['global_a'], results['global_a_std'], 10000)
+    true_global = np.unique(temp.global_elasticity)[0]
+    p_mae = np.mean(bootstrap_means) - true_global
+    g_mae = np.mean(global_means) - true_global
+    
+    # Plot global data
+    ax3.hist(bootstrap_means, bins=100, alpha=0.3, density=True, 
+             label=f'Product Elasticity Bootstrap (MAE: {p_mae:.4f})')
+    ax3.hist(global_means, bins=100, alpha=0.3, density=True, 
+             label=f'Global Elasticity Distribution (MAE: {g_mae:.4f})')
+    ax3.axvline(x=true_global, color='black', linestyle='--', linewidth=2, 
+                label=f'Global Elasticity: {true_global:.3f}', zorder=0)
+    ax3.set_xlabel('Elasticity')
+    ax3.set_ylabel('Frequency')
+    ax3.set_title('Global Elasticity Comparison')
+    ax3.legend()
+    ax3.grid(True, linestyle='--', alpha=0.7)
+    
+    plt.tight_layout()
+    plt.show()
+
+elasticity_plots(result_df, results)
+```
 
 ## Conclusion
 
