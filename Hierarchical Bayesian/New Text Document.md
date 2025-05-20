@@ -3,11 +3,15 @@
 In this multi-part series, I will introduce you to hierarchical Bayesian modelling, a flexible modeling approach to automatically combine the results of multiple sub-models with optimal weights determined automatically through Bayesian updating. This article will introduce the concept, implementation, and alternative use cases for this method. 
 
 ### The Problem with Traditional Approaches
-As an application, imagine that we’re a large grocery store trying to maximize product-level revenue by setting prices. First, we would need to estimate the price elasticity of demand (how responsive demand is to a 1% change in price) using longitudinal data with N products over T periods. Remember that elasticity so defined as $\beta=\frac{\partial \log{\textrm{Units}}_{it}}{\partial \log \textrm{Price}_{it}}$
-
+As an application, imagine that we’re a large grocery store trying to maximize product-level revenue by setting prices. First, we would need to estimate the price elasticity of demand (how responsive demand is to a 1% change in price) using longitudinal data with $N$ products over $T$ periods. Remember that elasticity so defined as:
+```math
+\beta=\frac{\partial \log{\textrm{Units}}_{it}}{\partial \log \textrm{Price}_{it}}
+```
 Assuming no confounders, using a standard fixed-effect regression model of log units sold on log price:
 
-$$\log(\textrm{Units}_{it})= \beta  \log(\textrm{Price})_{it} +\gamma_t+ \delta_i+ \epsilon_{it}$$
+```math
+\log(\textrm{Units}_{it})= \beta  \log(\textrm{Price})_{it} +\gamma_t+ \delta_i+ \epsilon_{it}
+```
 
 Would allow us to recover the average elasticity $\beta$ across all $N$ units, also known as the Average Treatment Effect. This would mean that the store could target an average price level across all products in their store to maximize revenue. If these units have a natural grouping (product categories), we might be able to identify the average elasticity of each product category by running a separate sub-regression using only units from that category. This would mean that the store could target average prices in each product category to maximize revenue in that category. If $T$ is large enough, we might even be able to run a separate regression for each individual unit to recover unit-level elasticity of demand, allowing the store to set prices at the product-level. 
 
@@ -28,7 +32,9 @@ The "Bayesian" aspect refers to how we update our beliefs about these parameters
 
 Let's formalize this with our price elasticity example, where we try to estimate unit-level price elasticity:
 
-$\log(\textrm{Units}_{it})= \beta  \log(\textrm{Price})_{it} +\gamma_{c(i),t}+ \delta_i+ \epsilon_{it}$
+```math
+\log(\textrm{Units}_{it})= \beta  \log(\textrm{Price})_{it} +\gamma_{c(i),t}+ \delta_i+ \epsilon_{it}
+```
 
 Where:
  - $\beta_i \sim \textrm{Normal}(\beta_{c\left(i\right)},\sigma_i)$
