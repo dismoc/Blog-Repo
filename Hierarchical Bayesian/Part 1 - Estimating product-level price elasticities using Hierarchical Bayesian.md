@@ -37,7 +37,7 @@ At its core, HB is about recognizing the natural structure in our data. Rather t
  - Group-level parameters that apply to observations within that group.
  - Individual-level parameters that apply to each specific individual.
 
-This methodology is flexible enough to add or remove hierarchies as needed, depending on the desired level of pooling. For example, if we think there are no similarities across categories, we could remove the global parameter. If we think that these products have no natural groupings, we could remove the group-level parameters. If we only care about the group-level effect, we can remove the individual-level parameter and have the group-level coefficients as our most granular parameter. If there exists the presence of subgroups nested within the groups, we can add another hierarchical layer. The possibilites are endless!
+This methodology is flexible enough to add or remove hierarchies as needed, depending on the desired level of pooling. For example, if we think there are no similarities across categories, we could remove the global parameter. If we think that these products have no natural groupings, we could remove the group-level parameters. If we only care about the group-level effect, we can remove the individual-level parameter and have the group-level coefficients as our most granular parameter. If there exists the presence of subgroups nested within the groups, we can add another hierarchical layer. The possibiliites are endless!
 
 The "Bayesian" aspect refers to how we update our beliefs about these parameters based on observed data. We first start with a proposed prior distribution that represent our initial belief of these parameters, then update them iteratively to recover a posterior distributions that incorporates the information from the data. In practice, this means that we use the global-level estimate to inform our group-level estimates, and the group-level parameters to inform the unit-level parameters. Units with a larger number of observations are allowed to deviate more from the group-level means, while units with a limited number of observations are pulled closer to the means. 
 
@@ -440,7 +440,6 @@ prod_elasticity_df = pd.DataFrame({
     'product_elasticity_svi_std': results['product_a_std'],
 })
 result_df = df.merge(prod_elasticity_df, on='product', how='left')
-result_df.head()
 
 # Category elasticity estimates
 prod_elasticity_df = pd.DataFrame({
@@ -460,7 +459,6 @@ result_df.head()
 <table border="1" class="dataframe">
   <thead>
     <tr style="text-align: right;">
-      <th></th>
       <th>product</th>
       <th>category</th>
       <th>time_period</th>
@@ -480,7 +478,6 @@ result_df.head()
   </thead>
   <tbody>
     <tr>
-      <th>0</th>
       <td>0</td>
       <td>8</td>
       <td>0</td>
@@ -498,7 +495,6 @@ result_df.head()
       <td>0.2952548</td>
     </tr>
     <tr>
-      <th>1</th>
       <td>0</td>
       <td>8</td>
       <td>1</td>
@@ -516,7 +512,6 @@ result_df.head()
       <td>0.2952548</td>
     </tr>
     <tr>
-      <th>2</th>
       <td>0</td>
       <td>8</td>
       <td>2</td>
@@ -534,7 +529,6 @@ result_df.head()
       <td>0.2952548</td>
     </tr>
     <tr>
-      <th>3</th>
       <td>0</td>
       <td>8</td>
       <td>3</td>
@@ -552,7 +546,6 @@ result_df.head()
       <td>0.2952548</td>
     </tr>
     <tr>
-      <th>4</th>
       <td>0</td>
       <td>8</td>
       <td>4</td>
@@ -578,7 +571,7 @@ result_df.head()
 
 The following code plots the true and estimated elasticities for each product. Each point is ranked by their true elasticity value (black), and the estimated elasticity from the model is also shown. We can see that the estimated elasticities follows the path of the true elasticities, with a Mean Absolute Error of around 0.0724. Points in red represents products whose 95% CI does not contain the true elasticity, while points in blue represent products whose 95% CI contains the true elasticity. Given that the global mean is -1.598, this represents an average error of 4.5% at the product level. We can see that the SVI estimates closely follow the pattern of the true elasticities but with some noise, particularly as the elasticities become more and more negative. On the top right panel, we plot the relationship between the error of the estimated elasticities and the true elasticity values. As true elasticities become more and more negative, our model becomes less accurate. 
 
-For the category-level and global-level elasticities, we can create the posteriors using two methods. We can either [boostrap](https://en.wikipedia.org/wiki/Bootstrapping_(statistics)) all product-level elasticities within the category, or we can get the category-level estimates directly from the posterior parameters. When we look at the category-level elasticitiy estimates on the bottom left, we can see that the both the category-level estimates recovered from the model and the bootstrapped samples from the product-level elasticities are also slightly biased towards zero, with an MAE of ~.033. However, the confidence interval given by the category-level parameter covers the true parameter, unlike the bootstrapped product-level estimates. This suggests that when determining group-level elasticities, we should directly use the group-level parameters instead of bootstrapping the more granular estimates. When looking at the global level, both methods contains the true parameter estimate in the 95% confidence bounds, with the global parameter out-performing the product-level bootstrapping, at the cost of having larger standard errors. 
+For the category-level and global-level elasticities, we can create the posteriors using two methods. We can either [boostrap](https://en.wikipedia.org/wiki/Bootstrapping_(statistics)) all product-level elasticities within the category, or we can get the category-level estimates directly from the posterior parameters. When we look at the category-level elasticity estimates on the bottom left, we can see that the both the category-level estimates recovered from the model and the bootstrapped samples from the product-level elasticities are also slightly biased towards zero, with an MAE of ~.033. However, the confidence interval given by the category-level parameter covers the true parameter, unlike the bootstrapped product-level estimates. This suggests that when determining group-level elasticities, we should directly use the group-level parameters instead of bootstrapping the more granular estimates. When looking at the global level, both methods contains the true parameter estimate in the 95% confidence bounds, with the global parameter out-performing the product-level bootstrapping, at the cost of having larger standard errors. 
 
 **Considerations** 
 
@@ -746,4 +739,4 @@ Finally, these models can also be used to combine results from experimental and 
 
 **Final Remarks**: While this introduction has highlighted several applications of hierarchical Bayesian models, we've only scratched the surface. We haven't deep dived into granular implementation aspects such as prior and posterior predictive checks, formal goodness-of-fit assessments, computational scaling, distributed training, performance of estimation strategies (MCMC vs. SVI), and non-nested hierarchical structures, each of which deserves their own post.
 
-Nevertheless, this overview should provide a practical starting point for incorporating hierarchical Bayesian into your toolkit. These models offer a framework for handling (usually) messy, multi-level data structures that are often seen in real-world business problems. As you begin implementing these approaches, I'd love to hear about your experiences, challenges, successes, and new use cases for this class of model, so please reach out with questions, insights, or examples through [my email](mailto:tranderektri@google.com) or [LinkedIn](https://www.linkedin.com/in/derek-tran-ab75ab64/). If you have any feedback on this article, or would like to request another topic in causal inference/machine learning, please also feel free to reach out. Thank you for reading!s
+Nevertheless, this overview should provide a practical starting point for incorporating hierarchical Bayesian into your toolkit. These models offer a framework for handling (usually) messy, multi-level data structures that are often seen in real-world business problems. As you begin implementing these approaches, I'd love to hear about your experiences, challenges, successes, and new use cases for this class of model, so please reach out with questions, insights, or examples through [my email](mailto:tranderektri@google.com) or [LinkedIn](https://www.linkedin.com/in/derek-tran-ab75ab64/). If you have any feedback on this article, or would like to request another topic in causal inference/machine learning, please also feel free to reach out. Thank you for reading!
