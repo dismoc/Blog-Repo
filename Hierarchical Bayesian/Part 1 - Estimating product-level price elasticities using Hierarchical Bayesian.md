@@ -5,6 +5,7 @@ In this article, I will introduce you to hierarchical Bayesian (HB) modelling, a
 The following sections will introduce the concept, implementation, and alternative use cases for this method. 
 
 ### The Problem with Traditional Approaches
+
 As an application, imagine that we’re a large grocery store trying to maximize product-level revenue by setting prices. We would need to estimate the demand curve (elasticity) for each product, then optimize some profit maximization function. As the first step to this workstream, we would need to estimate the price elasticity of demand (how responsive demand is to a 1% change in price) given some longitudinal data with $i \in N$ products over $t \in T$ periods. Remember that the price elasticity of demand is defined as:
 ```math
 \beta=\frac{\partial \log{\textrm{Units}}_{it}}{\partial \log \textrm{Price}_{it}}
@@ -318,7 +319,7 @@ The model uses NumPyro's plate to define the parameter groups:
 
 We then [reparameterize](https://sassafras13.github.io/ReparamTrick/) the parameters using The `LocScaleReparam()` argument to improve sampling efficiency and avoid funneling. After creating the parameters, we calculate log expected demand, then convert it back to a rate parameter with clipping for numerical stability. Finally, we call on the data plate to sample from a Poisson distribution with the calculated rate parameter. The optimization algorithm will then find the values of the parameters that best fit the data using stochastic gradient descent. Below is a graphical representation of the model to show the relationship between the parameters.
 
-<img src="./figures/output_1_0.svg">
+<img src="./figures/b1_output_1_0.svg">
 
 ```python
 import jax
@@ -385,7 +386,7 @@ numpyro.render_model(
 ### Estimation
 While there are multiple ways to estimate this equation, we use [Stochastic Variational Inference](https://jmlr.org/papers/volume14/hoffman13a/hoffman13a.pdf) (SVI) for this particular application. As an overview, SVI is a gradient-based optimization method to minimize the KL-divergence between a proposed posterior distribution to the true posterior distribution by minimizing the ELBO. This is a different estimation technique from [Markov-Chain Monte Carlo](https://www.publichealth.columbia.edu/research/population-health-methods/markov-chain-monte-carlo) (MCMC), which samples directly from the true posterior distribution. In real-world applications, SVI is more efficient and easily scales to large datasets. For this application, we set a random seed, initialize the guide (family of posterior distribution, assumed to be a Diagonal Normal), define the learning rate schedule and optimizer in Optax, and run the optimization for 1,000,000 (takes ~1 hour) iterations. While the model might have converged beforehand, the loss still improves by a minor amount even after running the optimization for 1,000,000 iterations. Finally, we plot the (log) losses.
 
-<img src="./figures/output_2_1.png">
+<img src="./figures/b1_output_2_1.png">
 
 ```python
 from numpyro.infer import SVI, Trace_ELBO, autoguide, init_to_sample
@@ -580,7 +581,7 @@ For the category-level and global-level elasticities, we can create the posterio
 1. **Importance of priors:** When using HB, priors matter significantly more compared to standard Bayesian approaches. While large datasets typically allow the likelihood to dominate priors when estimating global parameters, hierarchical structures changes this dynamic and reduce the effective sample sizes at each level. In our model, the global parameter only sees 10 category-level observations (not the full dataset), categories only draw from their contained products, and products rely solely on their own observations. This reduced effective sample size causes shrinkage, where outlier estimates (like very negative elasticities) get pulled toward their category means. This highlights the importance of [prior predictive checks](https://www.pymc.io/projects/docs/en/stable/learn/core_notebooks/posterior_predictive.html), since misspecified priors will have outsized influence on the results.
 
 
-<img src="./figures/output_4_0.png">
+<img src="./figures/b1_output_4_0.png">
 
 
 ```python
