@@ -290,6 +290,9 @@ with jax.default_device(jax.devices('cpu')[0]):
   </table>
 </div>
 
+<img src="./figures/b2_fig1.png">
+
+
 This application shows a significant increase in performance when moving from CPU to GPU, approximately ~32-35x depending on the size of the dataset. Scaling from 1 GPU to 4 GPUs also gives a significant performance increase, with values ranging from a 2x speedup in the small dataset to a 2.9x speedup in the large dataset. This indicates that the overhead of distributing computation (and small changes to the code) becomes increasingly justified as problem size increases. These results suggest that multi-GPU setups are essential for estimating large HB models in a reasonable amount of time. As we use even more advanced hardware (NVIDIA A100, H100, B200 GPUs), I expect this speed-up to be even more pronounced. When compared to traditional CPU-based MCMC approaches for large models, this potential speedup could reach up to **5 orders of magnitude**, allowing scientists to solve problems previously intractable.
 
 **Note on Mini-Batch Training:** I have gotten this code working with minibatching, but the speed of the model actually slows down significantly as compared to loading the full dataset on GPU. I assume that there is some loss in creating the indexes for batching, moving data from CPU to GPU, then distributing the data and indexes across GPUs. From what I've seen in practice, the minibatching with 1024 per batch is takes 2-3x longer than the 4 GPU case, and batching with 1048576 per batch takes 8x longer than the 4 GPU case. Therefore, **if the dataset can fit on memory, it is better to not incorporate batching**.
