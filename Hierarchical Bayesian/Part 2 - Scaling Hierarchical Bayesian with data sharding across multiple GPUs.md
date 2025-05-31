@@ -7,15 +7,15 @@ The following sections will introduce the theory underlying each inference metho
 ### Inference Methods
 Recall our baseline specification: 
 
-$$\log(\textrm{Demand}_{it})= \beta_i \log(\textrm{Price})_{it} +\gamma_{c(i),t} + \delta_i + \epsilon_{it}$$
+$$\log(\text{Demand}_{it})= \beta_i \log(\text{Price})_{it} +\gamma_{c(i),t} + \delta_i + \epsilon_{it}$$
 
 Where:
- - $\textrm{Units Sold}_{it} \sim \textrm{Poisson}(\textrm{Demand}_{it}, \sigma_D)$
- - $\beta_i \sim \textrm{Normal}(\beta_{c\left(i\right)},\sigma_i)$
- - $\beta_{c(i)}\sim \textrm{Normal}(\beta_g,\sigma_{c(i)})$
- - $\beta_g\sim \textrm{Normal}(\mu,\sigma)$
+ - $\text{Units Sold}_{it} \sim \text{Poisson}(\text{Demand}_{it}, \sigma_D)$
+ - $\beta_i \sim \text{Normal}(\beta_{c\left(i\right)},\sigma_i)$
+ - $\beta_{c(i)}\sim \text{Normal}(\beta_g,\sigma_{c(i)})$
+ - $\beta_g\sim \text{Normal}(\mu,\sigma)$
 
-We would like to estimate the parameters vector (and their variance) $z = \{ \beta_g, \beta_{c(i)}, \beta_i, \gamma_{c(i),t}, \delta_i, \textrm{Demand}_{it} \}$ using the data $x = \{ \textrm{Units}_{it}, \textrm{Price}_{it}\}$. One advantage in using Bayesian methods compared to frequentist approaches is that we can directly model count/sales data with distributions like Poisson, avoiding issues with zero values that might arise when using log-transformed models. Using Bayesian, we specify a prior distribution (based on our beliefs) $p(z)$ that incorporates our knowledge about the vector $z$ before seeing any data. Then, given the observed data $x$, we generate a likelihood $p(x|z)$ that tells us how likely it is that we observe the data $x$ given our specification of $z$. We then apply Bayes' rule $p(z|x) = \frac{p(z)p(x|z)}{p(x)}$ to obtain the posterior distribution, which represents our updated beliefs about the parameters given the data. The denominator can also be written as $p(x) = \int p(z,x) \, dz = \int p(z)p(x|z) \, dz$. This reduces our equation to:
+We would like to estimate the parameters vector (and their variance) $z = \{ \beta_g, \beta_{c(i)}, \beta_i, \gamma_{c(i),t}, \delta_i, \text{Demand}_{it} \}$ using the data $x = \{ \text{Units}_{it}, \text{Price}_{it}\}$. One advantage in using Bayesian methods compared to frequentist approaches is that we can directly model count/sales data with distributions like Poisson, avoiding issues with zero values that might arise when using log-transformed models. Using Bayesian, we specify a prior distribution (based on our beliefs) $p(z)$ that incorporates our knowledge about the vector $z$ before seeing any data. Then, given the observed data $x$, we generate a likelihood $p(x|z)$ that tells us how likely it is that we observe the data $x$ given our specification of $z$. We then apply Bayes' rule $p(z|x) = \frac{p(z)p(x|z)}{p(x)}$ to obtain the posterior distribution, which represents our updated beliefs about the parameters given the data. The denominator can also be written as $p(x) = \int p(z,x) \, dz = \int p(z)p(x|z) \, dz$. This reduces our equation to:
 
 $$p(z|x) = \frac{p(z)p(x|z)}{\int p(z)p(x|z) \, dz}$$
 
